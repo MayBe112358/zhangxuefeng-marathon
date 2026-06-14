@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+.playwright-cli/
+output/
+_*.png
+最新统一版素材/

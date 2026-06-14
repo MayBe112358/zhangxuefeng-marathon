@@ -7,13 +7,15 @@
 const ASSET_LIST = {
   run0: 'assets/run0.png', run1: 'assets/run1.png', run2: 'assets/run2.png',
   run3: 'assets/run3.png', run4: 'assets/run4.png', run5: 'assets/run5.png',
-  slide: 'assets/slide.png',   // 滑铲动作（躲高空障碍）
+  jump: 'assets/jump.png',
+  slide: 'assets/slide.png',
   hurt: 'assets/crouch.png',   // 受伤（仅撞击/游戏结束时显示）
   obstacle_sprite: 'assets/obstacle_sprite.png',     // 雪碧（地面，跳）
   obstacle_icecream: 'assets/obstacle_icecream.png', // 巧乐兹（高空，滑铲）
   book1: 'assets/book1.png',  // 练习册 +1
   book2: 'assets/book2.png',  // 志愿书 +2
-  bg: 'assets/bg.png',        // 整合背景：健身房+跑步机一体，水平循环
+  bg: 'assets/bg.png',
+  belt: 'assets/belt.png',
 };
 const A = {};
 function preload() {
@@ -32,7 +34,7 @@ const ctx = canvas.getContext('2d');
 let W = 0, H = 0, DPR = 1;
 let groundY = 0;        // 主角脚底所在 y
 let S = 1;              // 整体缩放（基于高度）
-const BELT_FRAC = 0.872; // 背景图中传送带上表面所在的高度比例
+let beltY = 0, beltH = 0;
 
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2.5);
@@ -41,8 +43,10 @@ function resize() {
   canvas.width = Math.round(W * DPR);
   canvas.height = Math.round(H * DPR);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  S = H / 360;              // 角色/物体缩放，跟随背景高度，保证站在传送带上比例一致
-  groundY = H * BELT_FRAC;  // 脚底线 = 背景里传送带上表面所在高度
+  S = Math.max(0.82, Math.min(H / 520, W / 430));
+  beltH = Math.max(76 * S, H * 0.12);
+  beltY = H - beltH - Math.max(6, H * 0.015);
+  groundY = beltY + beltH * 0.32;
 }
 window.addEventListener('resize', resize);
 
@@ -111,7 +115,7 @@ let slideHeld = false;
 function jump() {
   if (state !== STATE.PLAYING) return;
   if (player.onGround && !player.sliding) {
-    player.vy = -920 * S;
+    player.vy = -1150 * S;
     player.onGround = false;
     sfx.jump();
   }
@@ -170,26 +174,26 @@ function spawn() {
   if (r < 0.58) {
     // 障碍物
     if (Math.random() < 0.55) {
-      const h = 68 * S;
+      const h = 70 * S;
       obstacles.push({ img: A.obstacle_sprite, x: W + 60, footY: groundY, h, type: 'jump' });
     } else {
-      const h = 52 * S;
+      const h = 66 * S;
       // 高空雪糕，位于头部高度，需蹲下
-      obstacles.push({ img: A.obstacle_icecream, x: W + 60, footY: groundY - playerHeight() * 0.62, h, type: 'duck' });
+      obstacles.push({ img: A.obstacle_icecream, x: W + 60, footY: groundY - playerHeight() * 0.48, h, type: 'duck' });
     }
   } else {
     // 收集道具
     const isBig = Math.random() < 0.4;
     const img = isBig ? A.book2 : A.book1;
     const value = isBig ? 2 : 1;
-    const h = 48 * S;
-    const y = groundY - rand(playerHeight() * 0.3, playerHeight() * 1.25);
+    const h = 58 * S;
+    const y = groundY - rand(playerHeight() * 0.35, playerHeight() * 1.2);
     items.push({ img, x: W + 60, y, h, value, taken: false });
   }
 }
 
 function playerHeight() { return 120 * S; }
-function playerSlideHeight() { return 86 * S; }   // 滑铲精灵绘制高度（含身体，趴下姿势）
+function playerSlideHeight() { return 76 * S; }   // 滑铲精灵绘制高度（含身体，趴下姿势）
 const PLAYER_X = 0.14;                              // 主角身体左缘所在屏幕比例
 
 // ---------- 碰撞 ----------
@@ -217,15 +221,14 @@ function update(dt) {
   speed = baseSpeed() * Math.min(2.3, 1 + elapsed * 0.035);
   dist += speed * dt;
 
-  // 计分（距离）
-  score += speed * dt * 0.02;
+  // 只通过收集道具得分。
   document.getElementById('score').textContent = Math.floor(score);
 
-  // 背景滚动（健身房+跑步机一体，整体随传送带滚动）
-  scrollBg = (scrollBg + speed * dt) % bgDrawW();
+  // 背景只做很轻的视差移动；跑步机地基保持固定。
+  scrollBg = (scrollBg + speed * dt * 0.18) % bgDrawW();
 
   // 玩家物理
-  player.vy += 3400 * S * dt;
+  player.vy += 3100 * S * dt;
   player.y -= player.vy * dt;
   if (player.y <= 0) { player.y = 0; player.vy = 0; player.onGround = true; }
   else player.onGround = false;
@@ -288,18 +291,29 @@ function gameOver() {
 }
 
 // ---------- 绘制 ----------
-// 背景按屏高铺满，水平循环；其中传送带上表面落在 groundY
-function bgDrawW() { return A.bg ? H * (A.bg.width / A.bg.height) : W; }
+function bgDrawH() { return Math.max(360, Math.min(H * 0.68, 560)); }
+function bgDrawW() { return A.bg ? bgDrawH() * (A.bg.width / A.bg.height) : W; }
 
 function drawBackground() {
   if (!A.bg) {   // 兜底：纯色
-    ctx.fillStyle = '#c9ecff'; ctx.fillRect(0, 0, W, groundY);
-    ctx.fillStyle = '#23262e'; ctx.fillRect(0, groundY, W, H - groundY);
+    ctx.fillStyle = '#c9ecff'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#2a2e38'; ctx.fillRect(0, beltY, W, H - beltY);
     return;
   }
+  ctx.fillStyle = '#bfe5ff';
+  ctx.fillRect(0, 0, W, H);
+  const bh = bgDrawH();
   const bw = bgDrawW();
   const off = scrollBg % bw;
-  for (let x = -off - bw; x < W; x += bw) ctx.drawImage(A.bg, x, 0, bw, H);
+  const y = beltY - bh - beltH * 0.18;
+  for (let x = -off - bw; x < W; x += bw) ctx.drawImage(A.bg, x, y, bw, bh);
+}
+
+function drawBelt() {
+  if (!A.belt) return;
+  const bw = Math.max(W * 1.08, beltH * (A.belt.width / A.belt.height));
+  const x = (W - bw) * 0.5;
+  ctx.drawImage(A.belt, x, beltY, bw, beltH);
 }
 
 function drawPlayer() {
@@ -314,13 +328,13 @@ function drawPlayer() {
       const slh = playerSlideHeight();
       const sw = slh * (img.width / img.height);
       const runW = playerHeight() * (A.run0 ? A.run0.width / A.run0.height : 0.75);
-      const left = cx + runW * 0.5 - sw * 0.70;
+      const left = cx + runW * 0.45 - sw * 0.62;
       ctx.drawImage(img, left, footY - slh, sw, slh);
     }
     return;
   }
   let img;
-  if (!player.onGround) img = A.run3;           // 腾空帧
+  if (!player.onGround) img = A.jump || A.run3; // 腾空帧
   else img = A['run' + runFrame];
   drawSprite(img, cx, footY, playerHeight());
 }
@@ -337,7 +351,8 @@ function drawEntities() {
 
 function render() {
   ctx.clearRect(0, 0, W, H);
-  drawBackground();   // 含跑步机
+  drawBackground();
+  drawBelt();
   drawEntities();
   drawPlayer();
 }

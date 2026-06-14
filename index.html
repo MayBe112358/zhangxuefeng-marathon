@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#7fc8f5">
 <title>高考冲刺跑酷 · 张雪峰马拉松</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,7 +20,10 @@
 
   <!-- 开始界面 -->
   <div id="start-screen" class="overlay">
-    <img id="logo" src="assets/logo.png" alt="高考冲刺跑酷">
+    <div id="logo" aria-label="高考冲刺跑酷">
+      <span>高考冲刺</span>
+      <strong>跑酷</strong>
+    </div>
     <p class="subtitle">助张雪峰冲刺高考马拉松！</p>
     <button class="btn btn-primary" id="btn-start">开始游戏</button>
     <div class="hint">
@@ -35,7 +39,7 @@
       <div class="final-score-label">最终得分</div>
       <div class="final-score" id="final-score">0</div>
       <div class="best-line">最高纪录 <span id="final-best">0</span></div>
-      <div id="new-record" class="new-record hidden">🎉 新纪录！</div>
+      <div id="new-record" class="new-record hidden">新纪录！</div>
       <button class="btn btn-primary" id="btn-restart">重新开始</button>
     </div>
   </div>
