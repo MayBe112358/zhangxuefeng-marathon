@@ -7,12 +7,15 @@
 const ASSET_LIST = {
   run0: 'assets/run0.png', run1: 'assets/run1.png', run2: 'assets/run2.png',
   run3: 'assets/run3.png', run4: 'assets/run4.png', run5: 'assets/run5.png',
-  crouch: 'assets/crouch.png',
+  slide: 'assets/slide.png',   // 滑铲动作（躲高空障碍）
+  hurt: 'assets/crouch.png',   // 受伤（仅撞击/游戏结束时显示）
   obstacle_sprite: 'assets/obstacle_sprite.png',     // 雪碧（地面，跳）
-  obstacle_icecream: 'assets/obstacle_icecream.png', // 巧乐兹（高空，蹲）
+  obstacle_icecream: 'assets/obstacle_icecream.png', // 巧乐兹（高空，滑铲）
   book1: 'assets/book1.png',  // 练习册 +1
   book2: 'assets/book2.png',  // 志愿书 +2
-  sky: 'assets/sky.png', far: 'assets/far.png', ground: 'assets/ground.png',
+  sky: 'assets/sky.png', far: 'assets/far.png',
+  belt: 'assets/belt.png',       // 跑步机传送带（循环滚动）
+  console: 'assets/console.png', // 跑步机控制台/扶手（固定最右）
 };
 const A = {};
 function preload() {
@@ -89,7 +92,7 @@ let runFrame = 0, runTimer = 0;
 
 // 玩家
 const player = {
-  y: 0, vy: 0, onGround: true, ducking: false, dead: false,
+  y: 0, vy: 0, onGround: true, sliding: false, dead: false,
 };
 
 function baseSpeed() { return Math.max(300, W * 0.42); }
@@ -97,26 +100,26 @@ function baseSpeed() { return Math.max(300, W * 0.42); }
 function reset() {
   score = 0; dist = 0; elapsed = 0; speed = baseSpeed();
   obstacles = []; items = []; spawnTimer = 0.6;
-  player.y = 0; player.vy = 0; player.onGround = true; player.ducking = false; player.dead = false;
-  duckHeld = false; pointerId = null;
+  player.y = 0; player.vy = 0; player.onGround = true; player.sliding = false; player.dead = false;
+  slideHeld = false; pointerId = null;
   runFrame = 0; runTimer = 0;
   document.getElementById('score').textContent = '0';
   document.getElementById('best').textContent = best;
 }
 
 // ---------- 输入 ----------
-let duckHeld = false;
+let slideHeld = false;
 function jump() {
   if (state !== STATE.PLAYING) return;
-  if (player.onGround && !player.ducking) {
+  if (player.onGround && !player.sliding) {
     player.vy = -1080 * S;
     player.onGround = false;
     sfx.jump();
   }
 }
-function setDuck(on) {
-  duckHeld = on;
-  if (state === STATE.PLAYING) player.ducking = on && player.onGround;
+function setSlide(on) {
+  slideHeld = on;
+  if (state === STATE.PLAYING) player.sliding = on && player.onGround;
 }
 
 window.addEventListener('keydown', e => {
@@ -125,13 +128,13 @@ window.addEventListener('keydown', e => {
     e.preventDefault(); initAudio();
     if (state === STATE.PLAYING) jump(); else startOrRestart();
   } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
-    e.preventDefault(); setDuck(true);
+    e.preventDefault(); setSlide(true);
   } else if (e.code === 'Enter') {
     if (state !== STATE.PLAYING) startOrRestart();
   }
 });
 window.addEventListener('keyup', e => {
-  if (e.code === 'ArrowDown' || e.code === 'KeyS') setDuck(false);
+  if (e.code === 'ArrowDown' || e.code === 'KeyS') setSlide(false);
 });
 
 // 指针（手机/鼠标）
@@ -140,16 +143,16 @@ canvas.addEventListener('pointerdown', e => {
   initAudio();
   if (state !== STATE.PLAYING) { return; }   // 由按钮触发开始/重开
   pointerId = e.pointerId; pointerStartY = e.clientY;
-  // 下方 1/3 区域按住 = 蹲
-  if (e.clientY > H * 0.66) setDuck(true);
+  // 下方 1/3 区域按住 = 滑铲
+  if (e.clientY > H * 0.66) setSlide(true);
   else jump();
 });
 canvas.addEventListener('pointermove', e => {
   if (pointerId !== e.pointerId || state !== STATE.PLAYING) return;
-  if (e.clientY - pointerStartY > 40) setDuck(true);   // 下滑 = 蹲
+  if (e.clientY - pointerStartY > 40) setSlide(true);   // 下滑 = 滑铲
 });
-canvas.addEventListener('pointerup', e => { if (pointerId === e.pointerId) { setDuck(false); pointerId = null; } });
-canvas.addEventListener('pointercancel', () => { setDuck(false); pointerId = null; });
+canvas.addEventListener('pointerup', e => { if (pointerId === e.pointerId) { setSlide(false); pointerId = null; } });
+canvas.addEventListener('pointercancel', () => { setSlide(false); pointerId = null; });
 
 // 按钮
 document.getElementById('btn-start').addEventListener('click', () => { initAudio(); startOrRestart(); });
@@ -187,20 +190,25 @@ function spawn() {
 }
 
 function playerHeight() { return 120 * S; }
-function playerDuckHeight() { return 80 * S; }
+function playerSlideHeight() { return 86 * S; }   // 滑铲精灵绘制高度（含身体，趴下姿势）
+const PLAYER_X = 0.14;                              // 主角身体左缘所在屏幕比例
 
 // ---------- 碰撞 ----------
 function rectsHit(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 function playerBox() {
-  const ph = player.ducking ? playerDuckHeight() : playerHeight();
-  const img = player.ducking ? A.crouch : A.run0;
-  const pw = ph * (img ? img.width / img.height : 0.75);
   const footY = groundY - player.y;
+  if (player.sliding && player.onGround) {
+    // 滑铲：低矮碰撞盒，可钻过高空障碍
+    const h = 48 * S, w = 92 * S;
+    return { x: W * PLAYER_X + 6 * S, y: footY - h, w, h };
+  }
+  const ph = playerHeight();
+  const pw = ph * (A.run0 ? A.run0.width / A.run0.height : 0.75);
   // 收缩碰撞盒，手感更宽容
   const mx = pw * 0.22, my = ph * 0.12;
-  return { x: W * 0.14 + mx, y: footY - ph + my, w: pw - mx * 2, h: ph - my * 2 };
+  return { x: W * PLAYER_X + mx, y: footY - ph + my, w: pw - mx * 2, h: ph - my * 2 };
 }
 
 // ---------- 更新 ----------
@@ -216,17 +224,17 @@ function update(dt) {
 
   // 背景滚动
   scrollFar = (scrollFar + speed * 0.18 * dt) % (farDrawW());
-  scrollGround = (scrollGround + speed * dt) % (groundTileW());
+  scrollGround = (scrollGround + speed * dt) % (beltTileW());
 
   // 玩家物理
   player.vy += 2600 * S * dt;
   player.y -= player.vy * dt;
   if (player.y <= 0) { player.y = 0; player.vy = 0; player.onGround = true; }
   else player.onGround = false;
-  player.ducking = duckHeld && player.onGround;
+  player.sliding = slideHeld && player.onGround;
 
   // 跑步动画
-  if (player.onGround && !player.ducking) {
+  if (player.onGround && !player.sliding) {
     runTimer += dt;
     const frameDur = Math.max(0.05, 0.12 - (speed / baseSpeed() - 1) * 0.04);
     if (runTimer >= frameDur) { runTimer = 0; runFrame = (runFrame + 1) % 6; }
@@ -282,8 +290,11 @@ function gameOver() {
 }
 
 // ---------- 绘制 ----------
-function farDrawW() { return A.far ? H * 0.42 * (A.far.width / A.far.height) : W; }
-function groundTileW() { return A.ground ? H * 0.20 * (A.ground.width / A.ground.height) : W; }
+const TREAD_H_FRAC = 0.22;   // 跑步机绘制高度占屏比
+const BELT_SURF = 0.415;     // 传送带上表面在素材内的高度比例
+function treadH() { return Math.min(H * TREAD_H_FRAC, W * 0.17); }   // 兼顾竖屏：窄屏时控制台不过宽
+function farDrawW() { return A.far ? H * 0.46 * (A.far.width / A.far.height) : W; }
+function beltTileW() { return A.belt ? treadH() * (A.belt.width / A.belt.height) : W; }
 
 function drawBackground() {
   // 天空渐变
@@ -297,29 +308,59 @@ function drawBackground() {
     for (let x = -((dist * 0.04) % sw); x < W; x += sw) ctx.drawImage(A.sky, x, 0, sw, sh);
     ctx.globalAlpha = 1;
   }
-  // 远景（健身房/跑道）
+  // 远景（健身房/跑道）：底边正好落在传送带上表面，自然衔接地面
   if (A.far) {
-    const fh = H * 0.42, fw = farDrawW();
-    const baseY = groundY - fh + H * 0.06;
-    for (let x = -scrollFar; x < W; x += fw) ctx.drawImage(A.far, x, baseY, fw, fh);
+    const fh = H * 0.46, fw = farDrawW();
+    const baseY = groundY - fh;
+    const off = scrollFar % fw;
+    for (let x = -off - fw; x < W; x += fw) ctx.drawImage(A.far, x, baseY, fw, fh);
+    // 远景与跑步机之间压一道淡淡阴影，过渡更柔和
+    const sg = ctx.createLinearGradient(0, groundY - H * 0.06, 0, groundY);
+    sg.addColorStop(0, 'rgba(20,24,34,0)'); sg.addColorStop(1, 'rgba(20,24,34,0.28)');
+    ctx.fillStyle = sg; ctx.fillRect(0, groundY - H * 0.06, W, H * 0.06);
   }
 }
 
 function drawGround() {
-  if (A.ground) {
-    const gh = H * 0.20, gw = groundTileW();
-    const y = groundY - gh * 0.30;
-    for (let x = -scrollGround; x < W; x += gw) ctx.drawImage(A.ground, x, y, gw, gh);
+  const th = treadH();
+  const yTop = groundY - th * BELT_SURF;
+  // 跑步机下方铺一层健身房地板（带渐变），杜绝缝隙与空洞
+  const fg = ctx.createLinearGradient(0, groundY, 0, H);
+  fg.addColorStop(0, '#3a3f4b'); fg.addColorStop(1, '#191c23');
+  ctx.fillStyle = fg;
+  ctx.fillRect(0, groundY, W, H - groundY);
+  // 传送带：循环滚动，铺满整屏宽
+  if (A.belt) {
+    const bw = beltTileW();
+    const off = scrollGround % bw;
+    for (let x = -off - bw; x < W; x += bw) ctx.drawImage(A.belt, x, yTop, bw, th);
   } else {
     ctx.fillStyle = '#2b2f38'; ctx.fillRect(0, groundY, W, H - groundY);
+  }
+  // 控制台 / 扶手：固定在最右端
+  if (A.console) {
+    const cw = th * (A.console.width / A.console.height);
+    ctx.drawImage(A.console, W - cw, yTop, cw, th);
   }
 }
 
 function drawPlayer() {
-  const cx = W * 0.14;
+  const cx = W * PLAYER_X;
   const footY = groundY - player.y;
-  if (state === STATE.OVER) { drawSprite(A.crouch, cx, footY, playerDuckHeight() * 1.05); return; }
-  if (player.ducking) { drawSprite(A.crouch, cx, footY, playerDuckHeight()); return; }
+  // 受伤图：仅游戏结束（撞到障碍）时显示
+  if (state === STATE.OVER) { drawSprite(A.hurt, cx - 6 * S, footY, playerHeight() * 0.86); return; }
+  // 滑铲：身体对齐跑步位置，扬尘拖在身后（左侧）
+  if (player.sliding) {
+    const img = A.slide;
+    if (img) {
+      const slh = playerSlideHeight();
+      const sw = slh * (img.width / img.height);
+      const runW = playerHeight() * (A.run0 ? A.run0.width / A.run0.height : 0.75);
+      const left = cx + runW * 0.5 - sw * 0.70;
+      ctx.drawImage(img, left, footY - slh, sw, slh);
+    }
+    return;
+  }
   let img;
   if (!player.onGround) img = A.run3;           // 腾空帧
   else img = A['run' + runFrame];
@@ -339,8 +380,8 @@ function drawEntities() {
 function render() {
   ctx.clearRect(0, 0, W, H);
   drawBackground();
-  drawEntities();
   drawGround();
+  drawEntities();
   drawPlayer();
 }
 

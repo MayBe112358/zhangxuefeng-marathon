@@ -119,6 +119,20 @@ save(im.crop((6, 498, 1078, 625)).convert("RGBA"), "sky.png")
 save(im.crop((5, 655, 1085, 792)).convert("RGBA"), "far.png")
 
 # ---- 7. 地面（跑步机）----
-save(trim(remove_bg(im.crop((5, 838, 1465, 1016)))), "ground.png")
+ground = trim(remove_bg(im.crop((5, 838, 1465, 1016))))
+save(ground, "ground.png")
+
+# ---- 7b. 拆分跑步机：可循环传送带 belt + 固定控制台(扶手) console ----
+gw, gh = ground.size
+# 传送带：取中段一块无端头/无黄色标记、可无缝平铺的切片
+belt = ground.crop((int(gw * 0.12), 0, int(gw * 0.42), gh))
+save(belt, "belt.png")
+# 控制台(扶手)：跑步机最右端（含显示器立柱与圆角端头），固定在屏幕最右
+console = ground.crop((int(gw * 0.905), 0, gw, gh))
+save(console, "console.png")
+
+# ---- 8. 滑铲动作（单张大图，去白底裁边）----
+slide = Image.open("滑铲.png").convert("RGBA")
+save(trim(remove_bg(slide)), "slide.png")
 
 print("ALL DONE")
