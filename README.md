@@ -25,8 +25,8 @@ python -m http.server 5179
 index.html          页面结构 + 开始/结束界面
 style.css           样式（HUD、面板、响应式）
 game.js             游戏引擎（渲染、物理、碰撞、计分、输入）
-assets/             从素材图切出的透明 PNG（人物6帧、蹲下、障碍、道具、场景）
-extract_assets.py   素材提取脚本（从『补充素材.png』重新生成 assets/）
+assets/             素材：人物6帧、滑铲、受伤、障碍、道具、Logo、整合背景 bg.png
+extract_assets.py   素材提取脚本（从『补充素材.png』『滑铲.png』『背景.png』生成 assets/）
 ```
 
 ## 重新生成素材

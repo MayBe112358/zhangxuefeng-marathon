@@ -13,9 +13,7 @@ const ASSET_LIST = {
   obstacle_icecream: 'assets/obstacle_icecream.png', // 巧乐兹（高空，滑铲）
   book1: 'assets/book1.png',  // 练习册 +1
   book2: 'assets/book2.png',  // 志愿书 +2
-  sky: 'assets/sky.png', far: 'assets/far.png',
-  belt: 'assets/belt.png',       // 跑步机传送带（循环滚动）
-  console: 'assets/console.png', // 跑步机控制台/扶手（固定最右）
+  bg: 'assets/bg.png',        // 整合背景：健身房+跑步机一体，水平循环
 };
 const A = {};
 function preload() {
@@ -33,7 +31,8 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let W = 0, H = 0, DPR = 1;
 let groundY = 0;        // 主角脚底所在 y
-let S = 1;              // 整体缩放（基于高度，设计高度 400）
+let S = 1;              // 整体缩放（基于高度）
+const BELT_FRAC = 0.872; // 背景图中传送带上表面所在的高度比例
 
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2.5);
@@ -42,8 +41,8 @@ function resize() {
   canvas.width = Math.round(W * DPR);
   canvas.height = Math.round(H * DPR);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  S = Math.min(H / 400, W / 700);   // 兼顾竖屏：窄屏时按宽度缩放，人物不会过大
-  groundY = H - H * 0.17;   // 脚底线（跑步机上表面附近）
+  S = H / 360;              // 角色/物体缩放，跟随背景高度，保证站在传送带上比例一致
+  groundY = H * BELT_FRAC;  // 脚底线 = 背景里传送带上表面所在高度
 }
 window.addEventListener('resize', resize);
 
@@ -84,7 +83,7 @@ const STATE = { READY: 0, PLAYING: 1, OVER: 2 };
 let state = STATE.READY;
 let score = 0, best = +(localStorage.getItem('zxf_best') || 0);
 let speed = 0, dist = 0, elapsed = 0;
-let scrollFar = 0, scrollGround = 0;
+let scrollBg = 0;
 let spawnTimer = 0;
 let obstacles = [];   // {kind, x, footY, h, w, type:'jump'|'duck'}
 let items = [];       // {img, x, y, h, value, taken}
@@ -112,7 +111,7 @@ let slideHeld = false;
 function jump() {
   if (state !== STATE.PLAYING) return;
   if (player.onGround && !player.sliding) {
-    player.vy = -1080 * S;
+    player.vy = -920 * S;
     player.onGround = false;
     sfx.jump();
   }
@@ -222,12 +221,11 @@ function update(dt) {
   score += speed * dt * 0.02;
   document.getElementById('score').textContent = Math.floor(score);
 
-  // 背景滚动
-  scrollFar = (scrollFar + speed * 0.18 * dt) % (farDrawW());
-  scrollGround = (scrollGround + speed * dt) % (beltTileW());
+  // 背景滚动（健身房+跑步机一体，整体随传送带滚动）
+  scrollBg = (scrollBg + speed * dt) % bgDrawW();
 
   // 玩家物理
-  player.vy += 2600 * S * dt;
+  player.vy += 3400 * S * dt;
   player.y -= player.vy * dt;
   if (player.y <= 0) { player.y = 0; player.vy = 0; player.onGround = true; }
   else player.onGround = false;
@@ -290,58 +288,18 @@ function gameOver() {
 }
 
 // ---------- 绘制 ----------
-const TREAD_H_FRAC = 0.22;   // 跑步机绘制高度占屏比
-const BELT_SURF = 0.415;     // 传送带上表面在素材内的高度比例
-function treadH() { return Math.min(H * TREAD_H_FRAC, W * 0.17); }   // 兼顾竖屏：窄屏时控制台不过宽
-function farDrawW() { return A.far ? H * 0.46 * (A.far.width / A.far.height) : W; }
-function beltTileW() { return A.belt ? treadH() * (A.belt.width / A.belt.height) : W; }
+// 背景按屏高铺满，水平循环；其中传送带上表面落在 groundY
+function bgDrawW() { return A.bg ? H * (A.bg.width / A.bg.height) : W; }
 
 function drawBackground() {
-  // 天空渐变
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#8fd0fb'); g.addColorStop(0.55, '#c9ecff'); g.addColorStop(1, '#eef8ff');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  // 天空贴图（淡淡铺一层云）
-  if (A.sky) {
-    const sh = H * 0.55, sw = sh * (A.sky.width / A.sky.height);
-    ctx.globalAlpha = 0.9;
-    for (let x = -((dist * 0.04) % sw); x < W; x += sw) ctx.drawImage(A.sky, x, 0, sw, sh);
-    ctx.globalAlpha = 1;
+  if (!A.bg) {   // 兜底：纯色
+    ctx.fillStyle = '#c9ecff'; ctx.fillRect(0, 0, W, groundY);
+    ctx.fillStyle = '#23262e'; ctx.fillRect(0, groundY, W, H - groundY);
+    return;
   }
-  // 远景（健身房/跑道）：底边正好落在传送带上表面，自然衔接地面
-  if (A.far) {
-    const fh = H * 0.46, fw = farDrawW();
-    const baseY = groundY - fh;
-    const off = scrollFar % fw;
-    for (let x = -off - fw; x < W; x += fw) ctx.drawImage(A.far, x, baseY, fw, fh);
-    // 远景与跑步机之间压一道淡淡阴影，过渡更柔和
-    const sg = ctx.createLinearGradient(0, groundY - H * 0.06, 0, groundY);
-    sg.addColorStop(0, 'rgba(20,24,34,0)'); sg.addColorStop(1, 'rgba(20,24,34,0.28)');
-    ctx.fillStyle = sg; ctx.fillRect(0, groundY - H * 0.06, W, H * 0.06);
-  }
-}
-
-function drawGround() {
-  const th = treadH();
-  const yTop = groundY - th * BELT_SURF;
-  // 跑步机下方铺一层健身房地板（带渐变），杜绝缝隙与空洞
-  const fg = ctx.createLinearGradient(0, groundY, 0, H);
-  fg.addColorStop(0, '#3a3f4b'); fg.addColorStop(1, '#191c23');
-  ctx.fillStyle = fg;
-  ctx.fillRect(0, groundY, W, H - groundY);
-  // 传送带：循环滚动，铺满整屏宽
-  if (A.belt) {
-    const bw = beltTileW();
-    const off = scrollGround % bw;
-    for (let x = -off - bw; x < W; x += bw) ctx.drawImage(A.belt, x, yTop, bw, th);
-  } else {
-    ctx.fillStyle = '#2b2f38'; ctx.fillRect(0, groundY, W, H - groundY);
-  }
-  // 控制台 / 扶手：固定在最右端
-  if (A.console) {
-    const cw = th * (A.console.width / A.console.height);
-    ctx.drawImage(A.console, W - cw, yTop, cw, th);
-  }
+  const bw = bgDrawW();
+  const off = scrollBg % bw;
+  for (let x = -off - bw; x < W; x += bw) ctx.drawImage(A.bg, x, 0, bw, H);
 }
 
 function drawPlayer() {
@@ -379,8 +337,7 @@ function drawEntities() {
 
 function render() {
   ctx.clearRect(0, 0, W, H);
-  drawBackground();
-  drawGround();
+  drawBackground();   // 含跑步机
   drawEntities();
   drawPlayer();
 }
