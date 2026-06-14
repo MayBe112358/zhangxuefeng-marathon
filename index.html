@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#7fc8f5">
+<title>高考冲刺跑酷 · 张雪峰马拉松</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game-wrap">
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hud-item">得分 <span id="score">0</span></div>
+    <div class="hud-item">最高 <span id="best">0</span></div>
+  </div>
+
+  <!-- 开始界面 -->
+  <div id="start-screen" class="overlay">
+    <img id="logo" src="assets/logo.png" alt="高考冲刺跑酷">
+    <p class="subtitle">助张雪峰冲刺高考马拉松！</p>
+    <button class="btn btn-primary" id="btn-start">开始游戏</button>
+    <div class="hint">
+      <p class="hint-desktop">空格 / ↑ 跳跃　·　↓ 蹲下　·　躲开 <b>雪碧</b> 和 <b>雪糕</b>，接住 <b>书本</b> 加分</p>
+      <p class="hint-mobile">点击屏幕跳跃　·　按住下方蹲下　·　躲开零食，接住书本加分</p>
+    </div>
+  </div>
+
+  <!-- 结束界面 -->
+  <div id="over-screen" class="overlay hidden">
+    <div class="panel">
+      <h1>游戏结束</h1>
+      <div class="final-score-label">最终得分</div>
+      <div class="final-score" id="final-score">0</div>
+      <div class="best-line">最高纪录 <span id="final-best">0</span></div>
+      <div id="new-record" class="new-record hidden">🎉 新纪录！</div>
+      <button class="btn btn-primary" id="btn-restart">重新开始</button>
+    </div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
