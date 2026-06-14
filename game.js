@@ -157,9 +157,22 @@ canvas.addEventListener('pointermove', e => {
 canvas.addEventListener('pointerup', e => { if (pointerId === e.pointerId) { setSlide(false); pointerId = null; } });
 canvas.addEventListener('pointercancel', () => { setSlide(false); pointerId = null; });
 
+async function tryLandscapeMode() {
+  if (!window.matchMedia || !matchMedia('(pointer: coarse)').matches) return;
+  const wrap = document.getElementById('game-wrap');
+  try {
+    if (document.fullscreenEnabled && !document.fullscreenElement && wrap.requestFullscreen) {
+      await wrap.requestFullscreen();
+    }
+    if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
+  } catch (e) {
+    // Mobile browsers vary here; the CSS rotate prompt is the reliable fallback.
+  }
+}
+
 // 按钮
-document.getElementById('btn-start').addEventListener('click', () => { initAudio(); startOrRestart(); });
-document.getElementById('btn-restart').addEventListener('click', () => { initAudio(); startOrRestart(); });
+document.getElementById('btn-start').addEventListener('click', async () => { initAudio(); await tryLandscapeMode(); startOrRestart(); });
+document.getElementById('btn-restart').addEventListener('click', async () => { initAudio(); await tryLandscapeMode(); startOrRestart(); });
 
 function startOrRestart() {
   reset();
